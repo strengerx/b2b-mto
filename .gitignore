@@ -1,0 +1,91 @@
+# =========================
+# Environment & Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Node Dependencies
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Runtime Data
+# =========================
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# Coverage & Test Reports
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Build / Dist
+# =========================
+dist/
+build/
+
+# =========================
+# Cache
+# =========================
+.cache/
+.eslintcache
+
+# =========================
+# OS / Editor Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor Settings
+# =========================
+.vscode/
+!.vscode/extensions.json
+.idea/
+
+# =========================
+# Temporary Files
+# =========================
+tmp/
+temp/
+
+# =========================
+# Database Dumps / Backups
+# =========================
+*.sql
+*.dump
+*.bak
+
+# =========================
+# Mongoose / MongoDB
+# =========================
+*.bson
+
+# =========================
+# Debug Artifacts
+# =========================
+*.swp
+*.swo
+*.orig
+
+# =========================
+# Misc
+# =========================
+*.tgz
+*.zip
