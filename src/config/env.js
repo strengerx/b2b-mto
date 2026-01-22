@@ -51,3 +51,6 @@ export const DEBUG = getEnv('DEBUG', {
     defaultValue: false,
     type: 'boolean'
 });
+
+export const JWT_ACCESS_SECRET = getEnv('JWT_ACCESS_SECRET', { defaultValue: "your_access_secret", required: true })
+export const JWT_REFRESH_SECRET = getEnv('JWT_REFRESH_SECRET', { defaultValue: "your_refresh_secret", required: true })
