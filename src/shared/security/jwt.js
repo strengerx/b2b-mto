@@ -30,11 +30,13 @@ export const signRefreshToken = (user) => {
         throw new Error("User ID required to sign refresh token");
     }
 
-    return jwt.sign(
+    const jti = generateJti();
+
+    const token = jwt.sign(
         {
             sub: user._id.toString(),
             type: "refresh",
-            jti: generateJti()
+            jti
         },
         jwtConfig.refreshToken.secret,
         {
@@ -44,6 +46,8 @@ export const signRefreshToken = (user) => {
             audience: jwtConfig.audience
         }
     );
+
+    return { token, jti }
 };
 
 export const verifyAccessToken = (token) => {
@@ -63,8 +67,15 @@ export const verifyRefreshToken = (token) => {
 export const generateTokens = (user) => {
     if (!user) return null;
 
+    const accessToken = signAccessToken(user);
+    const { token: refreshToken, jti } = signRefreshToken(user);
+
     return {
-        accessToken: signAccessToken(user),
-        refreshToken: signRefreshToken(user)
-    };
+        accessToken,
+        refreshToken,
+        refreshTokenMeta: {
+            jti,
+            userId: user._id
+        }
+    }
 };

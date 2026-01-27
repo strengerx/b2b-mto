@@ -1,6 +1,7 @@
 import express from "express";
 import morgan from "morgan";
 import cors from "cors";
+import helmet from "helmet";
 
 import { corsOptions } from "./config/cors.config.js";
 import errorHandler from "./shared/errors/errorHandler.js";
@@ -10,6 +11,7 @@ import { authenticate } from "./shared/middlewares/authenticate.js";
 
 const app = express();
 
+app.use(helmet())
 app.use(morgan("dev"));
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "15kb" }));

@@ -5,10 +5,20 @@ import { defineConfig } from "eslint/config";
 export default defineConfig([
 	{
 		files: ["**/*.{js,mjs,cjs}"],
-		plugins: { js }, extends: ["js/recommended"],
-		languageOptions: { globals: globals.browser },
-		rules: {
-			// Custom rules can be added here
+
+		languageOptions: {
+			ecmaVersion: "latest",
+			sourceType: "module",
+			globals: {
+				...globals.node
+			}
 		},
-	},
+
+		plugins: { js },
+		extends: ["js/recommended"],
+
+		rules: {
+			// your rules
+		}
+	}
 ]);
