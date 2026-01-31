@@ -10,9 +10,6 @@ export class BaseService {
         this.defaultFilter = options.defaultFilter || {};
     }
 
-    /* ==============================
-       Build Mongo Filter
-    ================================ */
     buildFilter(query = {}) {
         const filter = { ...this.defaultFilter };
 
@@ -31,9 +28,6 @@ export class BaseService {
         return filter;
     }
 
-    /* ==============================
-       Pagination & Sorting
-    ================================ */
     buildOptions(query = {}) {
         const page = Math.max(Number(query.page) || 1, 1);
         const limit = Math.min(
@@ -50,10 +44,6 @@ export class BaseService {
             sort: query.sort || this.defaultSort
         };
     }
-
-    /* ==============================
-       CRUD METHODS
-    ================================ */
 
     async findAll(query = {}) {
         const filter = this.buildFilter(query);

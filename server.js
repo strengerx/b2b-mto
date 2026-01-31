@@ -12,9 +12,7 @@ const startServer = async () => {
         // Start listening
         await new Promise((resolve) => {
             server.listen(PORT, () => {
-                console.log(
-                    `🚀 Server running in ${NODE_ENV} mode at http://localhost:${PORT}`
-                );
+                console.log(`🚀 Server running in ${NODE_ENV} mode at http://localhost:${PORT}`);
                 resolve();
             });
         });
