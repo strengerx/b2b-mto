@@ -4,14 +4,7 @@ import { userService } from "./users.service.js";
 
 export const index = catchAsync(async (req, res) => {
     const result = await userService.findAll(req.query);
-
-    return success(
-        res,
-        result.data,
-        "All Users",
-        200,
-        result.meta
-    );
+    return success(res, result.data, "All Users", 200, result.meta);
 });
 
 export const store = catchAsync(async (req, res) => {
