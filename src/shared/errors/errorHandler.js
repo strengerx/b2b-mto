@@ -4,6 +4,7 @@ import { mapDbError } from "./dbErrorMap.js"
 import AppError from "./AppError.js"
 
 const errorHandler = (err, req, res, next) => {
+    void next;
     // 1️⃣ Zod validation errors
     if (err instanceof ZodError && Array.isArray(err.issues)) {
         const details = {}

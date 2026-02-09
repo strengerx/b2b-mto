@@ -18,7 +18,7 @@ export const authenticate = (req, res, next) => {
         req.user = { id: payload.sub, role: payload.role };
 
         return next();
-    } catch (err) {
+    } catch {
         return next(unauthorized("Invalid or expired authentication token"));
     }
 };
