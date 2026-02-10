@@ -1,11 +1,11 @@
 import { Router } from "express";
-import user from "./module/users/users.routes.js"
-import auth from "./module/auth/auth.routes.js"
-
-const modules = [user, auth];
+import user from "./module/users/users.routes.js";
+import auth from "./module/auth/auth.routes.js";
 
 const router = Router();
 
-modules.forEach((m) => router.use(m.basePath, m.routes));
+// Public routes (auth + user registration)
+router.use(auth.basePath, auth.routes);
+router.use(user.basePath, user.routes);
 
 export default router;

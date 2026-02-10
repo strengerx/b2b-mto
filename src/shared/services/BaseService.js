@@ -18,10 +18,11 @@ export class BaseService {
             filter.deletedAt = null;
         }
 
-        // Search
+        // Search (escape user input for regex to avoid injection/reDoS)
         if (query.search && this.searchFields.length) {
+            const escaped = String(query.search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             filter.$or = this.searchFields.map(field => ({
-                [field]: { $regex: query.search, $options: 'i' }
+                [field]: { $regex: escaped, $options: 'i' }
             }));
         }
 

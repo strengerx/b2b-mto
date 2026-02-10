@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { MONGO_URI, NODE_ENV } from './env.js';
+import { MONGO_URI, NODE_ENV, MONGO_POOL_SIZE } from './env.js';
 
 mongoose.set('strictQuery', true);
 
@@ -7,7 +7,7 @@ export const connectDB = async () => {
     try {
         const conn = await mongoose.connect(MONGO_URI, {
             autoIndex: NODE_ENV !== 'production',
-            maxPoolSize: 10,
+            maxPoolSize: MONGO_POOL_SIZE || 10,
             serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
         });

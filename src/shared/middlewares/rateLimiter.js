@@ -14,12 +14,7 @@ export const createRateLimiter = ({
         legacyHeaders: false,
 
         keyGenerator: keyGenerator || ((req) => {
-            const key = req.user?.id
-                ? `user:${req.user.id}`
-                : ipKeyGenerator(req)
-
-            console.log("RATE LIMIT KEY: ")
-            return key
+            return req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req);
         }),
 
         handler: (req, res, next) => {

@@ -2,6 +2,11 @@ import express from "express";
 import morgan from "morgan";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
+import csrfProtection from "./shared/middlewares/csrfProtection.js";
+import requestLogger from "./shared/middlewares/requestLogger.js";
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./config/swagger.js";
 
 import { corsOptions } from "./config/cors.config.js";
 import errorHandler from "./shared/errors/errorHandler.js";
@@ -15,6 +20,8 @@ app.use(helmet())
 app.use(morgan("dev"));
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "15kb" }));
+app.use(cookieParser());
+app.use(requestLogger);
 
 app.get("/", (req, res) => {
     res.status(200).json({
@@ -28,11 +35,24 @@ app.get("/", (req, res) => {
     });
 });
 
+// CSRF token endpoint - will set CSRF cookie
+app.get('/api/v1/csrf-token', csrfProtection, (req, res) => {
+    res.status(200).json({ csrfToken: req.csrfToken() });
+});
+
+// Mount Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Apply CSRF protection to mutating routes (POST, PUT, PATCH, DELETE)
+// app.use((req, res, next) => {
+//     const mutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+//     if (mutating) return csrfProtection(req, res, next);
+//     return next();
+// });
+
 app.use("/api/v1", apiRoutes);
 
-app.use(authenticate);
-
-app.get("/protected", (req, res) => {
+app.get("/protected", authenticate, (req, res) => {
     res.status(200).json({
         status: "success",
         message: "Protected route accessed",

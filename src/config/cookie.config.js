@@ -11,13 +11,14 @@ export const baseCookieOptions = {
 export const refreshTokenCookie = {
     ...baseCookieOptions,
     name: "refreshToken",
-    path: "/auth/refresh",
+    // cookie path should cover auth endpoints (refresh + logout)
+    path: "/api/v1/auth",
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
 };
 
 export const clearRefreshTokenCookie = {
     ...baseCookieOptions,
     name: "refreshToken",
-    path: "/auth/refresh",
+    path: "/api/v1/auth",
     expires: new Date(0)
 };

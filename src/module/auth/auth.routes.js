@@ -9,6 +9,7 @@ const router = Router();
 
 router
     .post("/login", createRateLimiter(RATE_LIMITS.LOGIN), validate(loginSchema), authController.login)
+    .post("/refresh", createRateLimiter(RATE_LIMITS.REFRESH), authController.refresh)
     .post("/logout", authController.logout);
 
 export default { basePath: "/auth", routes: router };
