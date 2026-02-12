@@ -21,12 +21,12 @@ const errorHandler = (err, req, res, next) => {
     // 2️⃣ Database errors
     err = mapDbError(err)
 
-    // 3️⃣ Ensure err is always an AppError
+    // 3️⃣ Ensure err is always an AppError. Preserve original error as `cause` and set a default code.
     if (!(err instanceof AppError)) {
         if (err instanceof Error) {
-            err = new AppError(err.message, err.statusCode || 500)
+            err = new AppError(err.message, err.statusCode || 500, null, { code: 'ERR_INTERNAL', cause: err })
         } else {
-            err = new AppError("Unexpected error", 500)
+            err = new AppError("Unexpected error", 500, null, { code: 'ERR_INTERNAL', cause: err })
         }
     }
 
@@ -42,6 +42,7 @@ const errorHandler = (err, req, res, next) => {
             message: err.message,
             data: null,
             errors: err.details ?? null,
+            code: err.code ?? null,
             meta: {
                 path: req.originalUrl,
                 method: req.method
@@ -59,6 +60,7 @@ const errorHandler = (err, req, res, next) => {
         message: "Something went wrong. Please try again later.",
         data: null,
         errors: null,
+        code: err.code ?? 'ERR_INTERNAL',
         meta: {
             path: req.originalUrl,
             method: req.method

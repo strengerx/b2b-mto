@@ -13,8 +13,16 @@ export class BaseService {
     buildFilter(query = {}) {
         const filter = { ...this.defaultFilter };
 
-        // Soft delete
-        if (this.softDelete && !query.includeDeleted) {
+        // Soft delete: normalize includeDeleted which may come as string in req.query
+        const includeDeleted = (() => {
+            if (query == null) return false;
+            const v = query.includeDeleted;
+            if (typeof v === 'boolean') return v;
+            if (typeof v === 'string') return ['1', 'true', 'yes'].includes(v.toLowerCase());
+            return false;
+        })();
+
+        if (this.softDelete && !includeDeleted) {
             filter.deletedAt = null;
         }
 
@@ -66,7 +74,14 @@ export class BaseService {
         };
     }
 
-    async findById(id) {
+    async findById(id, options = {}) {
+        // When softDelete is enabled, default to excluding deleted documents
+        const includeDeleted = options.includeDeleted === true;
+
+        if (this.softDelete && !includeDeleted) {
+            return this.model.findOne({ _id: id, deletedAt: null });
+        }
+
         return this.model.findById(id);
     }
 
@@ -81,12 +96,31 @@ export class BaseService {
         });
     }
 
+    // Safe update that loads the document and saves it back.
+    // This ensures model pre-save hooks (e.g., password hashing) are executed.
+    async updateByIdSafe(id, payload) {
+        if (!payload || typeof payload !== 'object') return this.updateById(id, payload);
+
+        const doc = await this.model.findById(id);
+        if (!doc) return null;
+
+        Object.assign(doc, payload);
+        await doc.save();
+        return doc;
+    }
+
     async deleteById(id) {
         if (this.softDelete) {
             return this.model.findByIdAndUpdate(id, {
                 deletedAt: new Date()
-            });
+            }, { new: true });
         }
         return this.model.findByIdAndDelete(id);
+    }
+
+    // Restore a soft-deleted document (only when softDelete enabled)
+    async restoreById(id) {
+        if (!this.softDelete) return null;
+        return this.model.findByIdAndUpdate(id, { deletedAt: null }, { new: true });
     }
 }

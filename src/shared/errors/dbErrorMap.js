@@ -5,60 +5,91 @@ import AppError from './AppError.js';
  */
 export const mapDbError = (err) => {
 
+    // helper to ensure details object shape
+    const ensureDetails = (d) => (d && typeof d === 'object' ? d : null);
+
     // MongoDB / Mongoose Errors
     // Duplicate key (unique index)
-    if (err.code === 11000) {
-        const field = Object.keys(err.keyValue || {})[0];
+    if (err && (err.code === 11000 || err.code === 'E11000')) {
+        const field = Object.keys(err.keyValue || {})[0] || 'field';
+        const details = { [field]: 'Duplicate value' };
 
-        return new AppError(`${capitalize(field)} already exists`, 409,
-            { [field]: 'Duplicate value' }
-        );
+        return new AppError(`${capitalize(field)} already exists`, 409, ensureDetails(details), {
+            code: 'ERR_DUPLICATE',
+            cause: err
+        });
     }
 
     // Validation error (schema validation)
-    if (err.name === 'ValidationError') {
+    if (err && err.name === 'ValidationError') {
         const errors = {};
         for (const key in err.errors) {
             errors[key] = err.errors[key].message;
         }
-        return new AppError('Validation failed', 400, errors);
+        return new AppError('Validation failed', 400, ensureDetails(errors), {
+            code: 'ERR_VALIDATION',
+            cause: err
+        });
     }
 
     // Cast error (invalid ObjectId)
-    if (err.name === 'CastError') {
-        return new AppError(`Invalid ${err.path}`, 400,
-            { [err.path]: 'Invalid format' }
-        );
+    if (err && err.name === 'CastError') {
+        const path = err.path || 'id';
+        const details = { [path]: 'Invalid format' };
+        return new AppError(`Invalid ${path}`, 400, ensureDetails(details), {
+            code: 'ERR_INVALID_FORMAT',
+            cause: err
+        });
     }
 
     // Sequelize / SQL Errors
     // Unique constraint (Postgres / MySQL)
-    if (err.name === 'SequelizeUniqueConstraintError') {
+    if (err && err.name === 'SequelizeUniqueConstraintError') {
         const errors = {};
-        err.errors.forEach(e => { errors[e.path] = 'Duplicate value'; });
+        (err.errors || []).forEach(e => {
+            const key = e.path || e.field || e.column || 'field';
+            errors[key] = 'Duplicate value';
+        });
 
-        return new AppError('Duplicate field value', 409, errors);
+        return new AppError('Duplicate field value', 409, ensureDetails(errors), {
+            code: 'ERR_DUPLICATE',
+            cause: err
+        });
     }
 
     // Foreign key constraint
-    if (err.name === 'SequelizeForeignKeyConstraintError') {
-        return new AppError('Invalid reference', 400,
-            { field: err.index || 'foreign_key' }
-        );
+    if (err && err.name === 'SequelizeForeignKeyConstraintError') {
+        const key = (err.fields && Object.keys(err.fields)[0]) || err.index || 'foreign_key';
+        const details = { [key]: 'Invalid reference' };
+        return new AppError('Invalid reference', 400, ensureDetails(details), {
+            code: 'ERR_INVALID_REFERENCE',
+            cause: err
+        });
     }
 
     // MySQL Native Errors
-    if (err.code === 'ER_DUP_ENTRY') {
-        return new AppError('Duplicate entry', 409);
+    if (err && err.code === 'ER_DUP_ENTRY') {
+        return new AppError('Duplicate entry', 409, null, { code: 'ERR_DUPLICATE', cause: err });
     }
 
-    if (err.code === 'ER_NO_REFERENCED_ROW_2') {
-        return new AppError('Invalid reference', 400);
+    if (err && err.code === 'ER_NO_REFERENCED_ROW_2') {
+        return new AppError('Invalid reference', 400, null, { code: 'ERR_INVALID_REFERENCE', cause: err });
     }
 
-    // Fallback → Unknown DB Error
-    return err;
+    // Fallback → wrap unknown DB Error to standard AppError, preserve original as cause
+    if (err instanceof Error) {
+        return new AppError(err.message || 'Database error', err.statusCode || 500, null, {
+            code: 'ERR_DB',
+            cause: err
+        });
+    }
+
+    // If it's not an Error object, return a generic AppError
+    return new AppError('Unknown database error', 500, null, { code: 'ERR_DB_UNKNOWN', cause: err });
 };
 
-const capitalize = (str = '') =>
-    str.charAt(0).toUpperCase() + str.slice(1);
+const capitalize = (str = '') => {
+    if (typeof str !== 'string') return '';
+    if (str.length === 0) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}

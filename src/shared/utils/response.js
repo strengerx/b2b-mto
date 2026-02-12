@@ -5,11 +5,13 @@ export const sendResponse = ({
     message = 'Success',
     data = null,
     errors = null,
+    code = null,
     meta = {}
 }) => {
     res.status(statusCode).json({
         status,
         message,
+        code,
         data,
         errors,
         meta: {

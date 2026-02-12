@@ -12,8 +12,9 @@ export const softDeletePlugin = (schema) => {
         this.isActive = false
         return this.save()
     }
-
-    schema.pre(/^find/, function () {
-        this.where({ deletedAt: null })
-    })
 }
+
+// NOTE: soft-delete plugin only provides the field and helper method.
+// Filtering of deleted records is intentionally handled at the service
+// layer (`BaseService`) to keep behavior explicit and testable.
+
