@@ -4,7 +4,7 @@ import { NODE_ENV } from '../../config/env.js';
 const SALT_ROUNDS_BY_ENV = {
     development: 10,
     test: 8,
-    production: 12
+    production: 14
 };
 
 export const SALT_ROUNDS =

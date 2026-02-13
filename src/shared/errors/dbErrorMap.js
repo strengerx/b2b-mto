@@ -76,16 +76,7 @@ export const mapDbError = (err) => {
         return new AppError('Invalid reference', 400, null, { code: 'ERR_INVALID_REFERENCE', cause: err });
     }
 
-    // Fallback → wrap unknown DB Error to standard AppError, preserve original as cause
-    if (err instanceof Error) {
-        return new AppError(err.message || 'Database error', err.statusCode || 500, err?.details, {
-            code: 'ERR_DB',
-            cause: err
-        });
-    }
-
-    // If it's not an Error object, return a generic AppError
-    return new AppError('Unknown database error', 500, null, { code: 'ERR_DB_UNKNOWN', cause: err });
+    return err;
 };
 
 const capitalize = (str = '') => {

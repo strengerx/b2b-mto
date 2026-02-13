@@ -13,7 +13,7 @@ export const authenticate = (req, res, next) => {
         if (payload.type !== "access") { return next(unauthorized("Invalid authentication token")); }
         req.user = { id: payload.sub, role: payload.role };
         return next();
-    } catch (err) {
+    } catch {
         return next(unauthorized("Invalid or expired authentication token"));
     }
 };
