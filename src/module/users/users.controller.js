@@ -4,7 +4,7 @@ import { userService } from "./users.service.js";
 import { pickFields } from "../../shared/utils/pickFields.js";
 
 export const index = catchAsync(async (req, res) => {
-    const result = await userService.findAll(req.query);
+    const result = await userService.findAll(req.query, ["_id", "name", "role", "email"]);
     return success(res, result.data, "All Users", 200, result.meta);
 });
 

@@ -69,7 +69,7 @@ export const mapDbError = (err) => {
 
     // MySQL Native Errors
     if (err && err.code === 'ER_DUP_ENTRY') {
-        return new AppError('Duplicate entry', 409, null, { code: 'ERR_DUPLICATE', cause: err });
+        return new AppError('Duplicate entry', 409, err?.details, { code: 'ERR_DUPLICATE', cause: err });
     }
 
     if (err && err.code === 'ER_NO_REFERENCED_ROW_2') {
@@ -78,7 +78,7 @@ export const mapDbError = (err) => {
 
     // Fallback → wrap unknown DB Error to standard AppError, preserve original as cause
     if (err instanceof Error) {
-        return new AppError(err.message || 'Database error', err.statusCode || 500, null, {
+        return new AppError(err.message || 'Database error', err.statusCode || 500, err?.details, {
             code: 'ERR_DB',
             cause: err
         });

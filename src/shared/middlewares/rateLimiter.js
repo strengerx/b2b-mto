@@ -18,11 +18,7 @@ export const createRateLimiter = ({
         }),
 
         handler: (req, res, next) => {
-            next(
-                TooManyRequests(
-                    message || "Too many requests, please try again later"
-                )
-            )
+            next(TooManyRequests(message || "Too many requests, please try again later"))
         }
     })
 }

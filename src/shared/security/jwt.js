@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { jwtConfig } from "../../config/jwt.config.js";
 
-const generateJti = () => crypto.randomUUID();
+const generateJti = () => crypto.randomBytes(128).toString("hex");
 
 export const signAccessToken = (user) => {
     if (!user?._id) {

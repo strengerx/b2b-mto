@@ -13,28 +13,35 @@ export class BaseService {
     buildFilter(query = {}) {
         const filter = { ...this.defaultFilter };
 
-        // Soft delete: normalize includeDeleted which may come as string in req.query
+        // Normalize includeDeleted (string-safe from req.query)
         const includeDeleted = (() => {
-            if (query == null) return false;
+            if (!query) return false;
             const v = query.includeDeleted;
             if (typeof v === 'boolean') return v;
             if (typeof v === 'string') return ['1', 'true', 'yes'].includes(v.toLowerCase());
             return false;
         })();
 
+        // Soft delete logic
         if (this.softDelete && !includeDeleted) {
             filter.deletedAt = null;
         }
 
-        // Search (escape user input for regex to avoid injection/reDoS)
+        // Search (escaped to prevent regex injection)
         if (query.search && this.searchFields.length) {
-            const escaped = String(query.search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const escaped = String(query.search)
+                .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
             filter.$or = this.searchFields.map(field => ({
                 [field]: { $regex: escaped, $options: 'i' }
             }));
         }
 
-        return filter;
+        return {
+            filter,
+            includeDeleted,
+            search: query.search
+        };
     }
 
     buildOptions(query = {}) {
@@ -54,12 +61,28 @@ export class BaseService {
         };
     }
 
-    async findAll(query = {}) {
-        const filter = this.buildFilter(query);
+    async findAll(query = {}, columns = []) {
+        const { filter, search, includeDeleted } = this.buildFilter(query);
         const { skip, limit, sort, page } = this.buildOptions(query);
 
+        // Build projection
+        let projection = null;
+
+        if (Array.isArray(columns) && columns.length > 0) {
+            projection = columns.reduce((acc, field) => {
+                acc[field] = 1;
+                return acc;
+            }, {});
+        }
+
         const [data, total] = await Promise.all([
-            this.model.find(filter).sort(sort).skip(skip).limit(limit),
+            this.model
+                .find(filter)
+                .select(projection)
+                .sort(sort)
+                .skip(skip)
+                .limit(limit),
+
             this.model.countDocuments(filter)
         ]);
 
@@ -69,7 +92,9 @@ export class BaseService {
                 total,
                 page,
                 limit,
-                pages: Math.ceil(total / limit)
+                pages: Math.ceil(total / limit),
+                ...(search && { search }),
+                ...(this.softDelete && { includeDeleted })
             }
         };
     }
