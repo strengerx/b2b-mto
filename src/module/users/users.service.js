@@ -1,7 +1,7 @@
 import { BaseService } from '../../shared/services/BaseService.js';
 import { User } from './users.model.js';
 
-class UserService extends BaseService {
+export default class UserService extends BaseService {
     constructor() {
         super(User, {
             searchFields: ['name', 'email'],

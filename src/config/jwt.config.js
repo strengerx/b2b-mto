@@ -3,7 +3,7 @@ import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from "./env.js"
 export const jwtConfig = {
     accessToken: {
         secret: JWT_ACCESS_SECRET,
-        expiresIn: "15m",
+        expiresIn: "60m",
         algorithm: "HS256"
     },
 

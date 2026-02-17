@@ -30,7 +30,7 @@ app.get("/", (req, res) => {
         data: null,
         errors: null,
         meta: {
-            timestamp: new Date().toISOString()
+            timestamp: new Date()
         }
     });
 });
@@ -59,7 +59,7 @@ app.get("/protected", authenticate, (req, res) => {
         data: { user: req.user },
         errors: null,
         meta: {
-            timestamp: new Date().toISOString()
+            timestamp: new Date()
         }
     });
 });
