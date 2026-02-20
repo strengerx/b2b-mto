@@ -25,12 +25,9 @@ app.use(requestLogger);
 
 app.get("/", (req, res) => {
     res.status(200).json({
-        status: "success",
-        message: "It's working 😎",
-        data: null,
-        errors: null,
+        status: "success", message: "It's working 😎", data: null, errors: null,
         meta: {
-            timestamp: new Date()
+            timestamp: new Date().toISOString()
         }
     });
 });
@@ -43,23 +40,13 @@ app.get('/api/v1/csrf-token', csrfProtection, (req, res) => {
 // Mount Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Apply CSRF protection to mutating routes (POST, PUT, PATCH, DELETE)
-// app.use((req, res, next) => {
-//     const mutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
-//     if (mutating) return csrfProtection(req, res, next);
-//     return next();
-// });
-
 app.use("/api/v1", apiRoutes);
 
 app.get("/protected", authenticate, (req, res) => {
     res.status(200).json({
-        status: "success",
-        message: "Protected route accessed",
-        data: { user: req.user },
-        errors: null,
+        status: "success", message: "Protected route accessed", data: { user: req.user }, errors: null,
         meta: {
-            timestamp: new Date()
+            timestamp: new Date().toISOString()
         }
     });
 });
