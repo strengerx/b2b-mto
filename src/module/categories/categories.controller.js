@@ -20,8 +20,8 @@ const formatCategory = (category) => {
  * GET /categories - List all active categories
  */
 export const index = catchAsync(async (req, res) => {
-    const result = await categoryService.findAll(req.query, CATEGORY_FIELDS.public);
-    return success(res, result.data, "All categories", 200, result.meta);
+    // const result = await categoryService.findAll(req.query, CATEGORY_FIELDS.public);
+    return success(res, null, "All categories", 200, null);
 });
 
 /**

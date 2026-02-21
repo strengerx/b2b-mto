@@ -3,52 +3,105 @@ export class BaseService {
         this.model = model;
 
         this.searchFields = options.searchFields || [];
-        this.defaultSort = options.defaultSort || '-createdAt';
+        this.defaultSort = options.defaultSort || "-createdAt";
         this.defaultLimit = options.defaultLimit || 10;
         this.maxLimit = options.maxLimit || 100;
         this.softDelete = options.softDelete ?? false;
         this.defaultFilter = options.defaultFilter || {};
     }
 
-    buildFilter(query = {}) {
-        const filter = { ...this.defaultFilter };
+    /* ============================================================
+         INTERNAL SAFETY HELPERS
+      ============================================================ */
+    isPlainObject(obj) {
+        return (
+            obj !== null && typeof obj === "object" && obj.constructor === Object
+        );
+    }
 
-        // Normalize includeDeleted (string-safe from req.query)
+    sanitizeQuery(query) {
+        if (!this.isPlainObject(query)) {
+            return {};
+        }
+
+        // clone to prevent mutation
+        return { ...query };
+    }
+
+    mergeQuery(query = {}, extraFilter = {}) {
+        const safeQuery = this.sanitizeQuery(query);
+
+        return {
+            ...safeQuery,
+            customFilter: {
+                ...(safeQuery.customFilter || {}),
+                ...extraFilter,
+            },
+        };
+    }
+
+    /* ============================================================
+         FILTER BUILDER
+      ============================================================ */
+    buildFilter(query = {}) {
+        query = this.sanitizeQuery(query);
+
+        const filter = {
+            ...this.defaultFilter,
+            ...(query.customFilter || {}),
+        };
+
+        // includeDeleted normalization
         const includeDeleted = (() => {
-            if (!query) return false;
             const v = query.includeDeleted;
-            if (typeof v === 'boolean') return v;
-            if (typeof v === 'string') return ['1', 'true', 'yes'].includes(v.toLowerCase());
+
+            if (typeof v === "boolean") return v;
+
+            if (typeof v === "string") {
+                return ["1", "true", "yes"].includes(v.toLowerCase());
+            }
+
             return false;
         })();
 
-        // Soft delete logic
+        // soft delete protection
         if (this.softDelete && !includeDeleted) {
             filter.deletedAt = null;
         }
 
-        // Search (escaped to prevent regex injection)
+        // search support
         if (query.search && this.searchFields.length) {
-            const escaped = String(query.search)
-                .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const escaped = String(query.search).replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&",
+            );
 
-            filter.$or = this.searchFields.map(field => ({
-                [field]: { $regex: escaped, $options: 'i' }
+            filter.$or = this.searchFields.map((field) => ({
+                [field]: {
+                    $regex: escaped,
+                    $options: "i",
+                },
             }));
         }
 
         return {
             filter,
             includeDeleted,
-            search: query.search
+            search: query.search,
         };
     }
 
+    /* ============================================================
+         OPTIONS BUILDER
+      ============================================================ */
     buildOptions(query = {}) {
+        query = this.sanitizeQuery(query);
+
         const page = Math.max(Number(query.page) || 1, 1);
+
         const limit = Math.min(
             Number(query.limit) || this.defaultLimit,
-            this.maxLimit
+            this.maxLimit,
         );
 
         const skip = (page - 1) * limit;
@@ -57,18 +110,23 @@ export class BaseService {
             page,
             limit,
             skip,
-            sort: query.sort || this.defaultSort
+            sort: query.sort || this.defaultSort,
         };
     }
 
+    /* ============================================================
+         FIND ALL
+      ============================================================ */
     async findAll(query = {}, columns = []) {
-        const { filter, search, includeDeleted } = this.buildFilter(query);
-        const { skip, limit, sort, page } = this.buildOptions(query);
+        const safeQuery = this.sanitizeQuery(query);
 
-        // Build projection
+        const { filter, search, includeDeleted } = this.buildFilter(safeQuery);
+
+        const { skip, limit, sort, page } = this.buildOptions(safeQuery);
+
         let projection = null;
 
-        if (Array.isArray(columns) && columns.length > 0) {
+        if (Array.isArray(columns) && columns.length) {
             projection = columns.reduce((acc, field) => {
                 acc[field] = 1;
                 return acc;
@@ -83,7 +141,7 @@ export class BaseService {
                 .skip(skip)
                 .limit(limit),
 
-            this.model.countDocuments(filter)
+            this.model.countDocuments(filter),
         ]);
 
         return {
@@ -94,58 +152,77 @@ export class BaseService {
                 limit,
                 pages: Math.ceil(total / limit),
                 ...(search && { search }),
-                ...(this.softDelete && { includeDeleted })
-            }
+                ...(this.softDelete && { includeDeleted }),
+            },
         };
     }
 
+    /* ============================================================
+         FIND ONE
+      ============================================================ */
     async findById(id, options = {}) {
-        // When softDelete is enabled, default to excluding deleted documents
         const includeDeleted = options.includeDeleted === true;
 
         if (this.softDelete && !includeDeleted) {
-            return this.model.findOne({ _id: id, deletedAt: null });
+            return this.model.findOne({
+                _id: id,
+                deletedAt: null,
+            });
         }
 
         return this.model.findById(id);
     }
 
+    /* ============================================================
+         CREATE
+      ============================================================ */
     async create(payload) {
         return this.model.create(payload);
     }
 
+    /* ============================================================
+         UPDATE
+      ============================================================ */
     async updateById(id, payload) {
         return this.model.findByIdAndUpdate(id, payload, {
             new: true,
-            runValidators: true
+            runValidators: true,
         });
     }
 
-    // Safe update that loads the document and saves it back.
-    // This ensures model pre-save hooks (e.g., password hashing) are executed.
+    // ensures mongoose hooks run
     async updateByIdSafe(id, payload) {
-        if (!payload || typeof payload !== 'object') return this.updateById(id, payload);
+        if (!payload || typeof payload !== "object") {
+            return this.updateById(id, payload);
+        }
 
         const doc = await this.model.findById(id);
         if (!doc) return null;
 
         Object.assign(doc, payload);
         await doc.save();
+
         return doc;
     }
 
+    /* ============================================================
+         DELETE / RESTORE
+      ============================================================ */
     async deleteById(id) {
         if (this.softDelete) {
-            return this.model.findByIdAndUpdate(id, {
-                deletedAt: new Date()
-            }, { new: true });
+            return this.model.findByIdAndUpdate(
+                id,
+                { deletedAt: new Date() },
+                { new: true },
+            );
         }
+
         return this.model.findByIdAndDelete(id);
     }
 
-    // Restore a soft-deleted document (only when softDelete enabled)
     async restoreById(id) {
         if (!this.softDelete) return null;
+
         return this.model.findByIdAndUpdate(id, { deletedAt: null }, { new: true });
     }
 }
