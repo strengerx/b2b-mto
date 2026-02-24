@@ -11,218 +11,209 @@ export class BaseService {
     }
 
     /* ============================================================
-         INTERNAL SAFETY HELPERS
-      ============================================================ */
-    isPlainObject(obj) {
-        return (
-            obj !== null && typeof obj === "object" && obj.constructor === Object
-        );
-    }
+        RESPONSE HELPERS ✅
+    ============================================================ */
 
-    sanitizeQuery(query) {
-        if (!this.isPlainObject(query)) {
-            return {};
-        }
-
-        // clone to prevent mutation
-        return { ...query };
-    }
-
-    mergeQuery(query = {}, extraFilter = {}) {
-        const safeQuery = this.sanitizeQuery(query);
-
+    success(data, meta = null) {
         return {
-            ...safeQuery,
-            customFilter: {
-                ...(safeQuery.customFilter || {}),
-                ...extraFilter,
-            },
+            success: true,
+            data,
+            ...(meta && { meta })
         };
     }
 
     /* ============================================================
-         FILTER BUILDER
-      ============================================================ */
-    buildFilter(query = {}) {
-        query = this.sanitizeQuery(query);
+        SAFETY HELPERS
+    ============================================================ */
 
+    isPlainObject(obj) {
+        return obj && typeof obj === "object" && obj.constructor === Object;
+    }
+
+    sanitizeQuery(query) {
+        return this.isPlainObject(query) ? { ...query } : {};
+    }
+
+    mergeQuery(query = {}, extraFilter = {}) {
+        const safe = this.sanitizeQuery(query);
+
+        return {
+            ...safe,
+            customFilter: {
+                ...(safe.customFilter || {}),
+                ...extraFilter
+            }
+        };
+    }
+
+    buildProjection(columns = []) {
+        if (!Array.isArray(columns) || !columns.length) return null;
+        return Object.fromEntries(columns.map(f => [f, 1]));
+    }
+
+    /* ============================================================
+        FILTER BUILDER
+    ============================================================ */
+
+    buildFilter(query = {}) {
         const filter = {
             ...this.defaultFilter,
-            ...(query.customFilter || {}),
+            ...(query.customFilter || {})
         };
 
-        // includeDeleted normalization
-        const includeDeleted = (() => {
-            const v = query.includeDeleted;
+        const includeDeleted =
+            ["true", "1", true].includes(query.includeDeleted);
 
-            if (typeof v === "boolean") return v;
-
-            if (typeof v === "string") {
-                return ["1", "true", "yes"].includes(v.toLowerCase());
-            }
-
-            return false;
-        })();
-
-        // soft delete protection
         if (this.softDelete && !includeDeleted) {
             filter.deletedAt = null;
         }
 
-        // search support
         if (query.search && this.searchFields.length) {
-            const escaped = String(query.search).replace(
-                /[.*+?^${}()|[\]\\]/g,
-                "\\$&",
-            );
+            const escaped = String(query.search)
+                .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-            filter.$or = this.searchFields.map((field) => ({
-                [field]: {
-                    $regex: escaped,
-                    $options: "i",
-                },
+            filter.$or = this.searchFields.map(field => ({
+                [field]: { $regex: escaped, $options: "i" }
             }));
         }
 
-        return {
-            filter,
-            includeDeleted,
-            search: query.search,
-        };
+        return { filter, includeDeleted };
     }
 
     /* ============================================================
-         OPTIONS BUILDER
-      ============================================================ */
-    buildOptions(query = {}) {
-        query = this.sanitizeQuery(query);
+        OPTIONS
+    ============================================================ */
 
+    buildOptions(query = {}) {
         const page = Math.max(Number(query.page) || 1, 1);
 
         const limit = Math.min(
             Number(query.limit) || this.defaultLimit,
-            this.maxLimit,
+            this.maxLimit
         );
-
-        const skip = (page - 1) * limit;
 
         return {
             page,
             limit,
-            skip,
-            sort: query.sort || this.defaultSort,
+            skip: (page - 1) * limit,
+            sort: query.sort || this.defaultSort
         };
     }
 
     /* ============================================================
-         FIND ALL
-      ============================================================ */
-    async findAll(query = {}, columns = []) {
+        FIND ALL ✅
+    ============================================================ */
+
+    async findAll(query = {}, columns = [], populate = []) {
         const safeQuery = this.sanitizeQuery(query);
 
-        const { filter, search, includeDeleted } = this.buildFilter(safeQuery);
+        const { filter } = this.buildFilter(safeQuery);
+        const { skip, limit, sort, page } =
+            this.buildOptions(safeQuery);
 
-        const { skip, limit, sort, page } = this.buildOptions(safeQuery);
+        const projection = this.buildProjection(columns);
 
-        let projection = null;
+        let mongoQuery = this.model
+            .find(filter)
+            .select(projection)
+            .sort(sort)
+            .skip(skip)
+            .limit(limit);
 
-        if (Array.isArray(columns) && columns.length) {
-            projection = columns.reduce((acc, field) => {
-                acc[field] = 1;
-                return acc;
-            }, {});
-        }
+        populate.forEach(p => {
+            mongoQuery = mongoQuery.populate(p);
+        });
 
         const [data, total] = await Promise.all([
-            this.model
-                .find(filter)
-                .select(projection)
-                .sort(sort)
-                .skip(skip)
-                .limit(limit),
-
-            this.model.countDocuments(filter),
+            mongoQuery,
+            this.model.countDocuments(filter)
         ]);
 
-        return {
-            data,
-            meta: {
-                total,
-                page,
-                limit,
-                pages: Math.ceil(total / limit),
-                ...(search && { search }),
-                ...(this.softDelete && { includeDeleted }),
-            },
-        };
-    }
-
-    /* ============================================================
-         FIND ONE
-      ============================================================ */
-    async findById(id, options = {}) {
-        const includeDeleted = options.includeDeleted === true;
-
-        if (this.softDelete && !includeDeleted) {
-            return this.model.findOne({
-                _id: id,
-                deletedAt: null,
-            });
-        }
-
-        return this.model.findById(id);
-    }
-
-    /* ============================================================
-         CREATE
-      ============================================================ */
-    async create(payload) {
-        return this.model.create(payload);
-    }
-
-    /* ============================================================
-         UPDATE
-      ============================================================ */
-    async updateById(id, payload) {
-        return this.model.findByIdAndUpdate(id, payload, {
-            new: true,
-            runValidators: true,
+        return this.success(data, {
+            total,
+            page,
+            limit,
+            pages: Math.ceil(total / limit)
         });
     }
 
-    // ensures mongoose hooks run
-    async updateByIdSafe(id, payload) {
-        if (!payload || typeof payload !== "object") {
-            return this.updateById(id, payload);
+    /* ============================================================
+        FIND ONE
+    ============================================================ */
+
+    async findById(id, options = {}) {
+        const filter = { _id: id };
+
+        if (this.softDelete && !options.includeDeleted) {
+            filter.deletedAt = null;
         }
 
-        const doc = await this.model.findById(id);
-        if (!doc) return null;
+        const doc = await this.model.findOne(filter);
 
-        Object.assign(doc, payload);
-        await doc.save();
-
-        return doc;
+        return this.success(doc);
     }
 
     /* ============================================================
-         DELETE / RESTORE
-      ============================================================ */
-    async deleteById(id) {
+        CREATE
+    ============================================================ */
+
+    async create(payload) {
+        const doc = await this.model.create(payload);
+        return this.success(doc);
+    }
+
+    /* ============================================================
+        UPDATE
+    ============================================================ */
+
+    async updateById(id, payload) {
+        const filter = { _id: id };
+
         if (this.softDelete) {
-            return this.model.findByIdAndUpdate(
-                id,
-                { deletedAt: new Date() },
-                { new: true },
-            );
+            filter.deletedAt = null;
         }
 
-        return this.model.findByIdAndDelete(id);
+        const doc = await this.model.findOneAndUpdate(
+            filter,
+            payload,
+            { new: true, runValidators: true }
+        );
+
+        return this.success(doc);
+    }
+
+    async updateAtomic(id, update) {
+        return this.model.findByIdAndUpdate(
+            id,
+            update,
+            { new: true }
+        );
+    }
+
+    /* ============================================================
+        DELETE / RESTORE
+    ============================================================ */
+
+    async deleteById(id) {
+        if (this.softDelete) {
+            const doc = await this.updateAtomic(id, {
+                deletedAt: new Date()
+            });
+
+            return this.success(doc);
+        }
+
+        const doc = await this.model.findByIdAndDelete(id);
+        return this.success(doc);
     }
 
     async restoreById(id) {
         if (!this.softDelete) return null;
 
-        return this.model.findByIdAndUpdate(id, { deletedAt: null }, { new: true });
+        const doc = await this.updateAtomic(id, {
+            deletedAt: null
+        });
+
+        return this.success(doc);
     }
 }

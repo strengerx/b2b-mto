@@ -1,60 +1,103 @@
-import { BaseService } from '../../shared/services/BaseService.js';
-import { User } from './users.model.js';
+import { BaseService } from "../../shared/services/BaseService.js";
+import { User } from "./users.model.js";
+import { AppError } from "../../shared/errors/AppError.js";
 
 export default class UserService extends BaseService {
+
     constructor() {
         super(User, {
-            searchFields: ['name', 'email'],
+            searchFields: ["name", "email"],
             softDelete: true,
-            defaultSort: '-createdAt'
+            defaultSort: "-createdAt"
         });
     }
 
-    // 🔍 Find by email (for login)
+    /* ============================================================
+        FIND BY EMAIL (LOGIN)
+    ============================================================ */
+
     async findByEmail(email, options = {}) {
-        const query = { email: email.toLowerCase() };
+
+        const filter = {
+            email: email.toLowerCase()
+        };
 
         if (this.softDelete && !options.includeDeleted) {
-            query.deletedAt = null;
+            filter.deletedAt = null;
         }
 
-        return this.model.findOne(query);
+        const user =
+            await this.model.findOne(filter);
+
+        return this.success(user);
     }
 
-    // 🔐 Change password safely (triggers pre-save hooks)
+    /* ============================================================
+        CHANGE PASSWORD ✅
+        (Triggers mongoose pre-save hashing)
+    ============================================================ */
+
     async changePassword(userId, newPassword) {
-        const user = await this.model.findById(userId);
-        if (!user) return null;
+
+        const user =
+            await this.model.findById(userId);
+
+        if (!user)
+            return this.success(null);
 
         user.password = newPassword;
-        await user.save(); // important: triggers hashing middleware
 
-        return user;
+        await user.save(); // triggers hashing middleware
+
+        return this.success(user);
     }
 
-    // 🚦 Activate / Deactivate user
+    /* ============================================================
+        ACTIVATE / DEACTIVATE USER
+    ============================================================ */
+
     async setActiveStatus(userId, isActive) {
-        return this.model.findByIdAndUpdate(
-            userId,
-            { isActive },
-            { new: true }
-        );
+
+        const updated =
+            await this.updateAtomic(
+                userId,
+                { isActive }
+            );
+
+        return this.success(updated);
     }
 
-    // 👑 Get users by role
+    /* ============================================================
+        FIND USERS BY ROLE
+    ============================================================ */
+
     async findByRole(role, query = {}) {
-        const { filter } = this.buildFilter(query);
 
-        return this.model.find({
-            ...filter,
-            role
-        });
+        const safeQuery =
+            this.mergeQuery(query, { role });
+
+        return this.findAll(safeQuery);
     }
 
-    // 🚫 Override delete if you want restrictions
+    /* ============================================================
+        SAFE DELETE OVERRIDE
+    ============================================================ */
+
     async deleteById(userId) {
-        // You could add logic here like:
-        // Prevent deleting super admin
+
+        const user =
+            await this.model.findById(userId);
+
+        if (!user)
+            return this.success(null);
+
+        // Example protection
+        if (user.role === "super_admin") {
+            throw new AppError(
+                "Super admin cannot be deleted",
+                403
+            );
+        }
 
         return super.deleteById(userId);
     }

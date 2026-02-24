@@ -5,182 +5,144 @@ import { categoryService } from "./categories.service.js";
 import AppError from "../../shared/errors/AppError.js";
 import { CATEGORY_FIELDS } from "./categories.constants.js";
 
+/* ============================================================
+    FORMATTER
+============================================================ */
 const formatCategory = (category) => {
     if (!category) return null;
-    return pickFields(category.toObject(), CATEGORY_FIELDS.public);
+    return pickFields(category.toObject ? category.toObject() : category, CATEGORY_FIELDS.public);
 };
 
-/**
- * ============================================================================
- * EXISTING ENDPOINTS
- * ============================================================================
- */
+/* ============================================================
+    BASIC CRUD
+============================================================ */
 
 /**
- * GET /categories - List all active categories
+ * GET /categories
  */
 export const index = catchAsync(async (req, res) => {
-    // const result = await categoryService.findAll(req.query, CATEGORY_FIELDS.public);
-    return success(res, null, "All categories", 200, null);
+    const result = await categoryService.findAll(req.query, CATEGORY_FIELDS.public);
+    return success(res, result.data.map(formatCategory), "All categories", 200, result.meta);
 });
 
 /**
- * GET /categories/:id - Get category details
+ * GET /categories/:id
  */
 export const show = catchAsync(async (req, res) => {
-    const category = await categoryService.findById(req.params.id);
-
-    if (!category) {
-        throw new AppError("Category not found", 404);
-    }
-
-    return success(res, formatCategory(category), "Category details");
+    const result = await categoryService.findById(req.params.id);
+    if (!result.data) throw new AppError("Category not found", 404);
+    return success(res, formatCategory(result.data), "Category details");
 });
 
 /**
- * POST /categories - Create new category (admin)
+ * POST /categories
  */
 export const store = catchAsync(async (req, res) => {
-    const newCategory = await categoryService.create(req.body);
-    return created(res, formatCategory(newCategory), "Category created successfully");
+    const result = await categoryService.create(req.body);
+    return created(res, formatCategory(result.data), "Category created successfully");
 });
 
 /**
- * PATCH /categories/:id - Update category (admin)
+ * PATCH /categories/:id
  */
 export const update = catchAsync(async (req, res) => {
     const allowedUpdates = pickFields(req.body, CATEGORY_FIELDS.update);
-    const updated = await categoryService.updateById(req.params.id, allowedUpdates);
-
-    if (!updated) {
-        throw new AppError("Category not found", 404);
-    }
-
-    return success(res, formatCategory(updated), "Category updated successfully");
+    const result = await categoryService.updateById(req.params.id, allowedUpdates);
+    if (!result.data) throw new AppError("Category not found", 404);
+    return success(res, formatCategory(result.data), "Category updated successfully");
 });
 
 /**
- * DELETE /categories/:id - Soft delete category (admin)
+ * DELETE /categories/:id
  */
 export const destroy = catchAsync(async (req, res) => {
     const { cascade = "moveUp" } = req.query;
-
     if (!["moveUp", "archive"].includes(cascade)) {
-        throw new AppError("Invalid cascade strategy. Use 'moveUp' or 'archive'", 400);
+        throw new AppError("Invalid cascade strategy", 400);
     }
-
-    await categoryService.deleteWithCascade(req.params.id, cascade);
+    const result = await categoryService.deleteWithCascade(req.params.id, cascade);
+    if (!result?.data) throw new AppError("Category not found", 404);
     return success(res, null, "Category deleted successfully");
 });
 
-/**
- * ============================================================================
- * PHASE 2: NEW ENDPOINTS
- * ============================================================================
- */
+/* ============================================================
+    TREE ENDPOINTS
+============================================================ */
 
 /**
- * GET /categories/tree/full - Get complete category tree (hierarchical)
- * Public endpoint for navigation/frontend use
+ * GET /categories/tree/full
  */
 export const getFullTree = catchAsync(async (req, res) => {
-    const tree = await categoryService.getFullTree();
-    return success(res, tree, "Category tree retrieved");
+    const result = await categoryService.getFullTree();
+    return success(res, result.data, "Category tree retrieved");
 });
 
 /**
- * GET /categories/:id/breadcrumb - Get breadcrumb path for category
- * Useful for: "Home > Electronics > Computers > Laptops"
+ * GET /categories/:id/breadcrumb
  */
 export const getBreadcrumb = catchAsync(async (req, res) => {
-    const breadcrumb = await categoryService.getBreadcrumb(req.params.id);
-    return success(res, breadcrumb, "Breadcrumb retrieved");
+    const result = await categoryService.getBreadcrumb(req.params.id);
+    return success(res, result.data, "Breadcrumb retrieved");
 });
 
 /**
- * GET /categories/:id/children - Get direct children of a category
+ * GET /categories/:id/children
  */
 export const getChildren = catchAsync(async (req, res) => {
-    const children = await categoryService.getChildren(req.params.id);
-
-    if (children.length === 0) {
+    const result = await categoryService.getChildren(req.params.id);
+    if (!result.data.length) {
         return success(res, [], "No subcategories found");
     }
-
-    return success(res, children.map(formatCategory), "Subcategories retrieved");
+    return success(res, result.data.map(formatCategory), "Subcategories retrieved");
 });
 
 /**
- * GET /categories/:id/descendants - Get all descendants (recursive)
+ * GET /categories/:id/descendants
  */
 export const getDescendants = catchAsync(async (req, res) => {
-    const descendants = await categoryService.getAllDescendants(req.params.id);
-
-    if (descendants.length === 0) {
+    const result = await categoryService.getAllDescendants(req.params.id);
+    if (!result.data.length) {
         return success(res, [], "No descendants found");
     }
-    console.log(descendants);
-    return success(res, descendants.map(formatCategory), "Descendants retrieved", 200);
+    return success(res, result.data.map(formatCategory), "Descendants retrieved");
 });
 
 /**
- * GET /categories/:id/tree - Get subtree starting from this category
- * Returns this category and all its children hierarchically
+ * GET /categories/:id/tree
  */
 export const getSubtree = catchAsync(async (req, res) => {
     const subtree = await categoryService.buildCategoryTree(req.params.id);
-
-    if (!subtree) {
-        throw new AppError("Category not found", 404);
-    }
-
+    if (!subtree) throw new AppError("Category not found", 404);
     return success(res, subtree, "Category subtree retrieved");
 });
 
-/**
- * ============================================================================
- * ADMIN ONLY: HEALTH & INTEGRITY
- * ============================================================================
- */
+/* ============================================================
+    ADMIN HEALTH CHECK
+============================================================ */
 
 /**
- * GET /categories/admin/integrity-check - Check category tree integrity
- * Admin only - validates no circular refs, valid ancestors, proper depth, etc.
+ * GET /categories/admin/integrity-check
  */
 export const checkIntegrity = catchAsync(async (req, res) => {
     const report = await categoryService.checkIntegrity();
-
     const status = report.issues === 0 ? "success" : "warning";
 
-    return success(res, report, `Category integrity check complete (${report.issues} issues found)`, 200, {
-        status,
-        timestamp: new Date().toISOString()
-    });
+    return success(res, report,
+        `Integrity check complete (${report.issues} issues found)`,
+        200,
+        { status, timestamp: new Date().toISOString() }
+    );
 });
 
-/**
- * ============================================================================
- * HELPER FUNCTION: Update category with better error handling
- * ============================================================================
- */
+/* ============================================================
+    SAFE UPDATE HELPER
+============================================================ */
 
-/**
- * Safely update category with validation
- * Handles circular references, parent validation, ancestor rebuild
- */
 export const updateSafe = async (categoryId, data) => {
     try {
-        const updated = await categoryService.updateById(categoryId, data);
-        return {
-            success: true,
-            data: updated,
-            error: null
-        };
+        const result = await categoryService.updateById(categoryId, data);
+        return { success: true, data: result.data, error: null };
     } catch (err) {
-        return {
-            success: false,
-            data: null,
-            error: err.message
-        };
+        return { success: false, data: null, error: err.message };
     }
 };

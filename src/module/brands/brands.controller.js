@@ -5,214 +5,322 @@ import { brandsService } from "./brands.service.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { BRAND_FIELDS } from "./brands.constants.js";
 
+/* ============================================================
+    FORMATTER
+============================================================ */
+
 const formatBrand = (brand) => {
     if (!brand) return null;
-    return pickFields(brand.toObject(), BRAND_FIELDS.public);
+
+    return pickFields(
+        brand.toObject ? brand.toObject() : brand,
+        BRAND_FIELDS.public
+    );
 };
 
-/**
- * ============================================================================
- * PUBLIC ENDPOINTS
- * ============================================================================
- */
+/* ============================================================
+    PUBLIC ENDPOINTS
+============================================================ */
 
 /**
- * GET /brands - List all active brands
+ * GET /brands
  */
 export const index = catchAsync(async (req, res) => {
     const query = req.validated?.query || {};
-    const result = await brandsService.getPublished(query, BRAND_FIELDS.public);
-    return success(res, result.data, "Brands retrieved", 200, result.meta);
+    const result = await brandsService.findAll(query, BRAND_FIELDS.public);
+    return success(res, result.data.map(formatBrand), "Brands retrieved", 200, result.meta);
 });
 
 /**
- * GET /brands/search - Search brands by text
+ * GET /brands/search
  */
 export const search = catchAsync(async (req, res) => {
+
     const { q, limit = 20 } = req.query;
 
-    if (!q || q.trim().length === 0) {
+    if (!q?.trim()) {
         return success(res, [], "No search query provided");
     }
 
-    const results = await brandsService.search(q, parseInt(limit));
-    return success(res, results.map(formatBrand), "Search results");
+    const result =
+        await brandsService.search(q, parseInt(limit));
+
+    return success(
+        res,
+        result.data.map(formatBrand),
+        "Search results"
+    );
 });
 
 /**
- * GET /brands/featured - Get featured brands
+ * GET /brands/featured
  */
 export const getFeatured = catchAsync(async (req, res) => {
-    const { limit = 10 } = req.query;
-    const brands = await brandsService.getFeatured(parseInt(limit));
-    return success(res, brands.map(formatBrand), "Featured brands retrieved");
+
+    const result =
+        await brandsService.getFeatured(req.query);
+
+    return success(
+        res,
+        result.data.map(formatBrand),
+        "Featured brands retrieved",
+        200,
+        result.meta
+    );
 });
 
 /**
- * GET /brands/verified - Get verified brands only
+ * GET /brands/verified
  */
 export const getVerified = catchAsync(async (req, res) => {
-    const result = await brandsService.getVerified(req.query);
-    return success(res, result.data.map(formatBrand), "Verified brands retrieved", 200, result.meta);
+
+    const result =
+        await brandsService.getVerified(req.query);
+
+    return success(
+        res,
+        result.data.map(formatBrand),
+        "Verified brands retrieved",
+        200,
+        result.meta
+    );
 });
 
 /**
- * GET /brands/trending - Get trending brands
+ * GET /brands/trending
  */
 export const getTrending = catchAsync(async (req, res) => {
-    const { limit = 10, days = 7 } = req.query;
-    const brands = await brandsService.getTrending(parseInt(limit), parseInt(days));
-    return success(res, brands.map(formatBrand), "Trending brands retrieved");
+
+    const result =
+        await brandsService.getTrending(req.query);
+
+    return success(
+        res,
+        result.data.map(formatBrand),
+        "Trending brands retrieved",
+        200,
+        result.meta
+    );
 });
 
 /**
- * GET /brands/country/:country - Get brands by country
+ * GET /brands/country/:country
  */
 export const getByCountry = catchAsync(async (req, res) => {
-    const { country } = req.params;
-    const { limit = 20 } = req.query;
 
-    const brands = await brandsService.getByCountry(country, { limit: parseInt(limit) });
-    return success(res, brands.map(formatBrand), `Brands from ${country}`);
+    const result =
+        await brandsService.getByCountry(
+            req.params.country,
+            req.query
+        );
+
+    return success(
+        res,
+        result.data.map(formatBrand),
+        `Brands from ${req.params.country}`,
+        200,
+        result.meta
+    );
 });
 
 /**
- * GET /brands/top - Get top brands by product count
+ * GET /brands/top
  */
 export const getTop = catchAsync(async (req, res) => {
-    const { limit = 10 } = req.query;
-    const brands = await brandsService.getTopByProductCount(parseInt(limit));
-    return success(res, brands.map(formatBrand), "Top brands by product count");
+
+    const result =
+        await brandsService.getTopByProductCount(req.query);
+
+    return success(
+        res,
+        result.data.map(formatBrand),
+        "Top brands by product count",
+        200,
+        result.meta
+    );
 });
 
 /**
- * GET /brands/:id - Get brand details
+ * GET /brands/:id
  */
 export const show = catchAsync(async (req, res) => {
-    const brand = await brandsService.findById(req.params.id);
 
-    if (!brand) {
+    const result =
+        await brandsService.findById(req.params.id);
+
+    if (!result.data) {
         throw new AppError("Brand not found", 404);
     }
 
-    // Increment view count
     await brandsService.incrementViews(req.params.id);
 
-    return success(res, formatBrand(brand), "Brand details retrieved");
+    return success(
+        res,
+        formatBrand(result.data),
+        "Brand details retrieved"
+    );
 });
 
-/**
- * ============================================================================
- * ADMIN ENDPOINTS (Require Authentication)
- * ============================================================================
- */
+/* ============================================================
+    ADMIN ENDPOINTS
+============================================================ */
 
 /**
- * POST /brands - Create new brand
+ * POST /brands
  */
 export const store = catchAsync(async (req, res) => {
-    const newBrand = await brandsService.create(req.body);
-    return created(res, formatBrand(newBrand), "Brand created successfully");
+
+    const result =
+        await brandsService.create(req.body);
+
+    return created(
+        res,
+        formatBrand(result.data),
+        "Brand created successfully"
+    );
 });
 
 /**
- * PATCH /brands/:id - Update brand
+ * PATCH /brands/:id
  */
 export const update = catchAsync(async (req, res) => {
-    const brand = await brandsService.findById(req.params.id);
 
-    if (!brand) {
+    const allowedUpdates =
+        pickFields(req.body, BRAND_FIELDS.update);
+
+    const result =
+        await brandsService.updateById(
+            req.params.id,
+            allowedUpdates
+        );
+
+    if (!result.data) {
         throw new AppError("Brand not found", 404);
     }
 
-    // Filter allowed updates
-    const allowedUpdates = pickFields(req.body, BRAND_FIELDS.update);
-
-    const updated = await brandsService.updateById(req.params.id, allowedUpdates);
-
-    if (!updated) {
-        throw new AppError("Brand not found", 404);
-    }
-
-    return success(res, formatBrand(updated), "Brand updated successfully");
+    return success(
+        res,
+        formatBrand(result.data),
+        "Brand updated successfully"
+    );
 });
 
 /**
- * DELETE /brands/:id - Soft delete brand
+ * DELETE /brands/:id
  */
 export const destroy = catchAsync(async (req, res) => {
-    const brand = await brandsService.findById(req.params.id);
 
-    if (!brand) {
+    const result =
+        await brandsService.deleteById(req.params.id);
+
+    if (!result.data) {
         throw new AppError("Brand not found", 404);
     }
 
-    await brandsService.deleteById(req.params.id);
-    return success(res, null, "Brand deleted successfully");
+    return success(
+        res,
+        null,
+        "Brand deleted successfully"
+    );
 });
 
 /**
- * POST /brands/:id/restore - Restore deleted brand
+ * POST /brands/:id/restore
  */
 export const restore = catchAsync(async (req, res) => {
-    const restored = await brandsService.restoreById(req.params.id);
 
-    if (!restored) {
-        throw new AppError("Brand not found or not deleted", 404);
+    const result =
+        await brandsService.restoreById(req.params.id);
+
+    if (!result?.data) {
+        throw new AppError(
+            "Brand not found or not deleted",
+            404
+        );
     }
 
-    return success(res, formatBrand(restored), "Brand restored successfully");
+    return success(
+        res,
+        formatBrand(result.data),
+        "Brand restored successfully"
+    );
 });
 
-/**
- * ============================================================================
- * ADMIN ACTIONS
- * ============================================================================
- */
+/* ============================================================
+    ADMIN ACTIONS
+============================================================ */
 
 /**
- * POST /brands/:id/verify - Verify brand (admin)
+ * POST /brands/:id/verify
  */
 export const verifyBrand = catchAsync(async (req, res) => {
-    const brand = await brandsService.findById(req.params.id);
 
-    if (!brand) {
+    const result =
+        await brandsService.verify(req.params.id);
+
+    if (!result.data)
         throw new AppError("Brand not found", 404);
-    }
 
-    const verified = await brandsService.verify(req.params.id);
-    return success(res, pickFields(verified.toObject(), ["_id", "name", "status"]), "Brand verified");
+    return success(
+        res,
+        pickFields(
+            result.data.toObject(),
+            ["_id", "name", "status"]
+        ),
+        "Brand verified"
+    );
 });
 
 /**
- * POST /brands/:id/unverify - Unverify brand (admin)
+ * POST /brands/:id/unverify
  */
 export const unverifyBrand = catchAsync(async (req, res) => {
-    const brand = await brandsService.findById(req.params.id);
 
-    if (!brand) {
+    const result =
+        await brandsService.unverify(req.params.id);
+
+    if (!result.data)
         throw new AppError("Brand not found", 404);
-    }
 
-    const unverified = await brandsService.unverify(req.params.id);
-    return success(res, pickFields(unverified.toObject(), ["_id", "name", "status"]), "Brand unverified");
+    return success(
+        res,
+        pickFields(
+            result.data.toObject(),
+            ["_id", "name", "status"]
+        ),
+        "Brand unverified"
+    );
 });
 
 /**
- * PATCH /brands/:id/popularity - Update popularity score (admin)
+ * PATCH /brands/:id/popularity
  */
 export const updatePopularity = catchAsync(async (req, res) => {
+
     const { score } = req.body;
 
     if (typeof score !== "number" || score < 0) {
-        throw new AppError("Score must be a non-negative number", 400);
+        throw new AppError(
+            "Score must be a non-negative number",
+            400
+        );
     }
 
-    const brand = await brandsService.updatePopularityScore(req.params.id, score);
+    const result =
+        await brandsService.updatePopularityScore(
+            req.params.id,
+            score
+        );
 
-    if (!brand) {
+    if (!result.data)
         throw new AppError("Brand not found", 404);
-    }
 
-    return success(res, pickFields(brand.toObject(), ["_id", "name", "metrics"]), "Popularity score updated");
+    return success(
+        res,
+        pickFields(
+            result.data.toObject(),
+            ["_id", "name", "metrics"]
+        ),
+        "Popularity score updated"
+    );
 });

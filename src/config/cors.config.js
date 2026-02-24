@@ -1,10 +1,15 @@
 import { NODE_ENV } from "./env.js";
 
-const DEV_ORIGINS = [/^http:\/\/.*\.localhost:\d+$/];
+const DEV_ORIGINS = [/^http:\/\/.*\.localhost:\d+$/,
+    "http://localhost:5500",
+    "http://127.0.0.1:5500"
+];
 
 const PROD_ORIGINS = [
     /^https:\/\/strengerx\.github\.io$/,
     /^https:\/\/.*\.strengerx\.com$/,
+    "http://localhost:5500",
+    "http://127.0.0.1:5500"
 ];
 
 const allowedOrigins =

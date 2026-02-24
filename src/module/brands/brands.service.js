@@ -1,8 +1,8 @@
 import { BaseService } from "../../shared/services/BaseService.js";
 import Brand from "./brands.model.js";
-import { AppError } from "../../shared/errors/AppError.js";
 
 export default class BrandsService extends BaseService {
+
     constructor() {
         super(Brand, {
             searchFields: ["name", "description", "labels"],
@@ -14,176 +14,105 @@ export default class BrandsService extends BaseService {
         });
     }
 
-    /**
-     * ============================================================================
-     * PUBLIC BRAND QUERIES
-     * ============================================================================
-     */
+    /* =========================
+        PUBLIC QUERIES
+    ========================= */
 
-    async getFeatured(query = {}) {
-        query.customFilter = {
-            isFeatured: true
-        };
+    getFeatured(query = {}) {
+        const safeQuery =
+            this.mergeQuery(query, { isFeatured: true });
 
         return this.findAll(
-            query,
-            ["name", "slug", "logo", "description", "metrics", "status"]
+            safeQuery,
+            ["name", "slug", "logo", "description", "metrics"]
         );
     }
 
-    async getVerified(query = {}) {
-        query.customFilter = {
-            "status.isVerified": true
-        };
-
-        return this.findAll(query);
-    }
-
-    async getByCountry(country, query = {}) {
-        query.customFilter = {
-            country
-        };
-
-        return this.findAll(query);
-    }
-
-    async getTopByProductCount(query = {}) {
-        query.sort = "-metrics.productCount";
-
+    getVerified(query = {}) {
         return this.findAll(
-            query,
+            this.mergeQuery(query, {
+                "status.isVerified": true
+            })
+        );
+    }
+
+    getByCountry(country, query = {}) {
+        return this.findAll(
+            this.mergeQuery(query, { country })
+        );
+    }
+
+    getTopByProductCount(query = {}) {
+        return this.findAll(
+            { ...query, sort: "-metrics.productCount" },
             ["name", "slug", "logo", "metrics"]
         );
     }
 
-    async getTrending(query = {}, daysBack = 7) {
+    getTrending(query = {}, daysBack = 7) {
         const dateFrom =
-            new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
+            new Date(Date.now() - daysBack * 86400000);
 
-        query.customFilter = {
+        const safeQuery = this.mergeQuery(query, {
             updatedAt: { $gte: dateFrom }
-        };
+        });
 
-        query.sort = "-updatedAt";
+        safeQuery.sort = "-updatedAt";
 
         return this.findAll(
-            query,
-            ["name", "slug", "logo", "description", "updatedAt"]
+            safeQuery,
+            ["name", "slug", "logo", "updatedAt"]
         );
     }
 
-    /**
-     * ============================================================================
-     * TEXT SEARCH (Mongo Text Index)
-     * ============================================================================
-     */
+    /* =========================
+        TEXT SEARCH
+    ========================= */
 
-    async search(searchTerm, limit = 20) {
-        return this.model
-            .find(
-                {
-                    $text: { $search: searchTerm }
-                },
-                { score: { $meta: "textScore" } }
-            )
-            .limit(limit)
-            .sort({ score: { $meta: "textScore" } })
-            .select("name slug logo description");
-    }
+    async search(term, limit = 20) {
 
-    /**
-     * ============================================================================
-     * PUBLISHED FILTER
-     * ============================================================================
-     */
-
-    async getPublished(query = {}, fields = null) {
-
-        const filter = {};
-
-        if (query.country)
-            filter.country = query.country;
-
-        if (query.isFeatured === "true")
-            filter.isFeatured = true;
-
-        if (query.isVerified === "true")
-            filter["status.isVerified"] = true;
-
-        if (query.showInHomepage === "true")
-            filter.showInHomepage = true;
-
-        // ✅ create NEW object instead of modifying query
-        const safeQuery = {
-            ...query,
-            customFilter: filter
+        const filter = {
+            $text: { $search: term },
+            ...(this.softDelete && { deletedAt: null })
         };
 
-        return this.findAll(safeQuery, fields);
+        const data = await this.model
+            .find(filter,
+                { score: { $meta: "textScore" } }
+            )
+            .sort({ score: { $meta: "textScore" } })
+            .limit(limit)
+            .select("name slug logo description");
+
+        return this.success(data);
     }
 
-    /**
-     * ============================================================================
-     * CREATE BRAND
-     * ============================================================================
-     */
+    /* =========================
+        ADMIN ACTIONS
+    ========================= */
 
-    async create(data) {
-        try {
-            return await super.create(data);
-        } catch (err) {
-            if (err.code === 11000) {
-                throw new AppError(
-                    "Brand with same name or slug already exists",
-                    400
-                );
-            }
-            throw err;
-        }
-    }
-
-    /**
-     * ============================================================================
-     * ADMIN ACTIONS
-     * ============================================================================
-     */
-
-    async verify(brandId) {
-        return this.updateById(brandId, {
+    verify(id) {
+        return this.updateById(id, {
             "status.isVerified": true
         });
     }
 
-    async unverify(brandId) {
-        return this.updateById(brandId, {
+    unverify(id) {
+        return this.updateById(id, {
             "status.isVerified": false
         });
     }
 
-    async incrementProductCount(brandId, value = 1) {
-        return this.model.findByIdAndUpdate(
-            brandId,
-            { $inc: { "metrics.productCount": value } },
-            { new: true }
-        );
-    }
-
-    async decrementProductCount(brandId, value = 1) {
-        return this.incrementProductCount(brandId, -value);
-    }
-
-    async updatePopularityScore(brandId, score) {
-        return this.updateById(brandId, {
-            "metrics.popularityScore": score
+    incrementProductCount(id, value = 1) {
+        return this.updateAtomic(id, {
+            $inc: { "metrics.productCount": value }
         });
     }
 
-    async incrementViews(brandId) {
-        return this.model.findByIdAndUpdate(
-            brandId,
-            { $inc: { "metrics.totalViews": 1 } },
-            { new: true }
-        );
+    incrementViews(id) {
+        return this.updateAtomic(id, {
+            $inc: { "metrics.totalViews": 1 }
+        });
     }
 }
 
