@@ -11,20 +11,16 @@ export class BaseService {
     }
 
     /* ============================================================
-        RESPONSE HELPERS ✅
-    ============================================================ */
+          RESPONSE HELPERS ✅
+      ============================================================ */
 
     success(data, meta = null) {
-        return {
-            success: true,
-            data,
-            ...(meta && { meta })
-        };
+        return { success: true, data, ...(meta && { meta }), };
     }
 
     /* ============================================================
-        SAFETY HELPERS
-    ============================================================ */
+          SAFETY HELPERS
+      ============================================================ */
 
     isPlainObject(obj) {
         return obj && typeof obj === "object" && obj.constructor === Object;
@@ -41,39 +37,40 @@ export class BaseService {
             ...safe,
             customFilter: {
                 ...(safe.customFilter || {}),
-                ...extraFilter
-            }
+                ...extraFilter,
+            },
         };
     }
 
     buildProjection(columns = []) {
         if (!Array.isArray(columns) || !columns.length) return null;
-        return Object.fromEntries(columns.map(f => [f, 1]));
+        return Object.fromEntries(columns.map((f) => [f, 1]));
     }
 
     /* ============================================================
-        FILTER BUILDER
-    ============================================================ */
+          FILTER BUILDER
+      ============================================================ */
 
     buildFilter(query = {}) {
         const filter = {
             ...this.defaultFilter,
-            ...(query.customFilter || {})
+            ...(query.customFilter || {}),
         };
 
-        const includeDeleted =
-            ["true", "1", true].includes(query.includeDeleted);
+        const includeDeleted = ["true", "1", true].includes(query.includeDeleted);
 
         if (this.softDelete && !includeDeleted) {
             filter.deletedAt = null;
         }
 
         if (query.search && this.searchFields.length) {
-            const escaped = String(query.search)
-                .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const escaped = String(query.search).replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&",
+            );
 
-            filter.$or = this.searchFields.map(field => ({
-                [field]: { $regex: escaped, $options: "i" }
+            filter.$or = this.searchFields.map((field) => ({
+                [field]: { $regex: escaped, $options: "i" },
             }));
         }
 
@@ -81,35 +78,34 @@ export class BaseService {
     }
 
     /* ============================================================
-        OPTIONS
-    ============================================================ */
+          OPTIONS
+      ============================================================ */
 
     buildOptions(query = {}) {
         const page = Math.max(Number(query.page) || 1, 1);
 
         const limit = Math.min(
             Number(query.limit) || this.defaultLimit,
-            this.maxLimit
+            this.maxLimit,
         );
 
         return {
             page,
             limit,
             skip: (page - 1) * limit,
-            sort: query.sort || this.defaultSort
+            sort: query.sort || this.defaultSort,
         };
     }
 
     /* ============================================================
-        FIND ALL ✅
-    ============================================================ */
+          FIND ALL ✅
+      ============================================================ */
 
     async findAll(query = {}, columns = [], populate = []) {
         const safeQuery = this.sanitizeQuery(query);
 
         const { filter } = this.buildFilter(safeQuery);
-        const { skip, limit, sort, page } =
-            this.buildOptions(safeQuery);
+        const { skip, limit, sort, page } = this.buildOptions(safeQuery);
 
         const projection = this.buildProjection(columns);
 
@@ -120,26 +116,26 @@ export class BaseService {
             .skip(skip)
             .limit(limit);
 
-        populate.forEach(p => {
+        populate.forEach((p) => {
             mongoQuery = mongoQuery.populate(p);
         });
 
         const [data, total] = await Promise.all([
             mongoQuery,
-            this.model.countDocuments(filter)
+            this.model.countDocuments(filter),
         ]);
 
         return this.success(data, {
             total,
             page,
             limit,
-            pages: Math.ceil(total / limit)
+            pages: Math.ceil(total / limit),
         });
     }
 
     /* ============================================================
-        FIND ONE
-    ============================================================ */
+          FIND ONE
+      ============================================================ */
 
     async findById(id, options = {}) {
         const filter = { _id: id };
@@ -154,8 +150,8 @@ export class BaseService {
     }
 
     /* ============================================================
-        CREATE
-    ============================================================ */
+          CREATE
+      ============================================================ */
 
     async create(payload) {
         const doc = await this.model.create(payload);
@@ -163,8 +159,8 @@ export class BaseService {
     }
 
     /* ============================================================
-        UPDATE
-    ============================================================ */
+          UPDATE
+      ============================================================ */
 
     async updateById(id, payload) {
         const filter = { _id: id };
@@ -173,31 +169,26 @@ export class BaseService {
             filter.deletedAt = null;
         }
 
-        const doc = await this.model.findOneAndUpdate(
-            filter,
-            payload,
-            { new: true, runValidators: true }
-        );
+        const doc = await this.model.findOneAndUpdate(filter, payload, {
+            new: true,
+            runValidators: true,
+        });
 
         return this.success(doc);
     }
 
     async updateAtomic(id, update) {
-        return this.model.findByIdAndUpdate(
-            id,
-            update,
-            { new: true }
-        );
+        return this.model.findByIdAndUpdate(id, update, { new: true });
     }
 
     /* ============================================================
-        DELETE / RESTORE
-    ============================================================ */
+          DELETE / RESTORE
+      ============================================================ */
 
     async deleteById(id) {
         if (this.softDelete) {
             const doc = await this.updateAtomic(id, {
-                deletedAt: new Date()
+                deletedAt: new Date(),
             });
 
             return this.success(doc);
@@ -211,7 +202,7 @@ export class BaseService {
         if (!this.softDelete) return null;
 
         const doc = await this.updateAtomic(id, {
-            deletedAt: null
+            deletedAt: null,
         });
 
         return this.success(doc);
